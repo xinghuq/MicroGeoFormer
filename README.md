@@ -14,7 +14,7 @@ This repository contains the core, reusable model. For the full simulation bench
 ## Installation
 
 ```bash
-git clone https://github.com/<your-org>/microgeoformer.git
+git clone https://github.com/xinghuq/microgeoformer.git
 cd microgeoformer
 pip install -r requirements.txt
 pip install -e .
