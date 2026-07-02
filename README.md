@@ -1,3 +1,103 @@
+# MicroGeoFormer
+
+A locus-attention deep learning model for predicting the geographic origin (latitude, longitude) of an individual organism from its multilocus genotype data (microsatellite or SNP). MicroGeoFormer is purpose-built for **sparse genetic marker panels** — the kind of low-locus, small-reference-sample data typical of legacy agricultural pest, forestry, and wildlife genetic-monitoring programmes — and is applicable to migratory-pest source-tracing, invasive-species incursion tracing, and endangered-species provenance verification.
+
+This repository contains the core, reusable model. For the full simulation benchmark and manuscript reproduction code, see the companion `microgeoformer-paper` repository.
+
+## Key features
+
+- **Locus-attention gate**: learns which loci carry the most geographic signal and returns a per-locus importance score, giving interpretability without a separate post hoc explainability step.
+- **Mendelian-resampling augmentation**: synthesizes additional, biologically valid training genotypes from individuals collected at the same reference locality, specifically targeting small per-locality sample sizes.
+- **Monte Carlo dropout uncertainty**: every prediction comes with a calibrated per-individual uncertainty estimate, not just a point estimate.
+- **scikit-learn-style API**: `.fit()`, `.predict()`, `.save()`, `.load()` — no need to touch the underlying PyTorch code to use the model.
+
+## Installation
+
+```bash
+git clone https://github.com/<your-org>/microgeoformer.git
+cd microgeoformer
+pip install -r requirements.txt
+pip install -e .
+```
+
+Requirements: Python ≥3.9, NumPy, SciPy, scikit-learn, PyTorch ≥2.0. No GPU is required; a typical fit on a few hundred individuals and 5–20 loci completes in under a minute on a single CPU core.
+
+## Quick start
+
+```python
+import numpy as np
+from microgeoformer import MicroGeoFormer
+
+# X: genotypes, shape (n_individuals, n_loci, 2) — two allele calls per locus,
+#    as integers (e.g. microsatellite repeat-size alleles or SNP 0/1 codes)
+# Y: known geographic origin, shape (n_individuals, 2) — (latitude, longitude)
+# locality_id: which reference locality each individual was sampled from,
+#    shape (n_individuals,) — used only for the Mendelian-augmentation step
+X = np.load("genotypes.npy")
+Y = np.load("coordinates.npy")
+locality_id = np.load("locality_id.npy")
+
+# Train/test split, stratified by locality so every locality appears in both
+from sklearn.model_selection import train_test_split
+idx_train, idx_test = train_test_split(
+    np.arange(len(X)), test_size=0.25, stratify=locality_id, random_state=0
+)
+
+model = MicroGeoFormer(epochs=400)
+model.fit(X[idx_train], Y[idx_train], locality_id=locality_id[idx_train])
+
+# Point prediction + calibrated uncertainty + per-locus importance
+Y_pred, Y_std, locus_importance = model.predict(
+    X[idx_test], return_std=True, return_locus_importance=True
+)
+
+# Median prediction error, in kilometres, on the held-out individuals
+print("Median error (km):", model.score(X[idx_test], Y[idx_test]))
+```
+
+Save and reload a trained model:
+
+```python
+model.save("microgeoformer_trained.pkl")
+model = MicroGeoFormer.load("microgeoformer_trained.pkl")
+```
+
+> **Note on reproducibility of predictions.** MicroGeoFormer uses Monte Carlo dropout at inference to produce calibrated uncertainty estimates, so two calls to `.predict()` on the same fitted model will return very slightly different point predictions (this is expected — it is exactly what makes `Y_std` meaningful, not a bug). If you need bit-for-bit reproducible output, set `mc_samples=1` and call `torch.manual_seed()` immediately before `.predict()`.
+
+## When to use Mendelian-resampling augmentation
+
+Augmentation (`augment=True`, the default) is recommended whenever your reference localities have fewer than roughly 15–20 individuals each — the regime MicroGeoFormer is specifically designed for. If your reference panel already has large, well-balanced samples per locality (dozens of individuals each) and a dense marker panel (hundreds of SNPs or more), a simpler classical method such as PCA + *k*-nearest-neighbours may perform as well or better at a fraction of the computational cost; see the benchmark results in the accompanying paper for guidance on when MicroGeoFormer's advantage is, and is not, expected to hold.
+
+## Handling missing data
+
+Missing genotype calls can be encoded with any consistent sentinel integer not otherwise used as an allele value (e.g. `-999`). The encoder treats each observed value, including the sentinel, as its own allele state, so a missing call at a given locus contributes no dosage signal for that locus rather than causing an error.
+
+## API reference
+
+### `MicroGeoFormer(hidden=96, depth=4, dropout=0.25, epochs=400, lr=1.5e-3, weight_decay=5e-4, loss_weights=(0.4, 0.6), augment=True, n_synth_per_locality=20, mc_samples=15, density_weighting=True, random_state=0)`
+
+| Parameter | Description |
+|---|---|
+| `hidden` | Width of each fully connected layer in the regression backbone. |
+| `depth` | Number of fully connected layers. |
+| `dropout` | Dropout probability (also used for Monte Carlo uncertainty at inference). |
+| `epochs` | Training epochs. |
+| `lr`, `weight_decay` | Adam optimizer settings. |
+| `loss_weights` | Weights `(w_mse, w_haversine)` for the combined training loss. |
+| `augment` | Whether to apply Mendelian-resampling augmentation using `locality_id`. |
+| `n_synth_per_locality` | Synthetic individuals generated per reference locality when `augment=True`. |
+| `mc_samples` | Monte Carlo dropout passes averaged at inference. |
+| `density_weighting` | Whether to weight the training loss by inverse local reference-population density. |
+| `random_state` | Seed for reproducible training. |
+
+**Methods**
+
+- `fit(X, Y, locality_id=None, verbose=False)` — train the model.
+- `predict(X, return_std=False, return_locus_importance=False)` — predict `(latitude, longitude)`, optionally with uncertainty and/or per-locus importance weights.
+- `score(X, Y)` — median Haversine prediction error (km) on a labelled test set.
+- `save(path)` / `MicroGeoFormer.load(path)` — persist and reload a trained model.
+
+Lower-level utilities (`DosageEncoder`, `mendelian_augment`, `haversine_km`) are also importable from `microgeoformer` directly if you want to build a custom pipeline.
 # MicroGeoFormer: Supplementary Code
 
 This archive contains all code used to produce the simulation benchmark, the
@@ -80,7 +180,18 @@ compare directly against the original published tools should run them from
 their respective repositories under the same data splits provided by this
 codebase.
 
+
+
+## Citation
+
+If you use MicroGeoFormer in your research, please cite:
+
+> Qin., X et al. 2026. MicroGeoFormer: resolving the geographic source-tracing challenge for migratory pests, biological invasions and trafficked wildlife with a locus-attention deep learning framework.
+
 ## License
+
+MIT License (see `LICENSE`). See `NOTICE.md` for attribution of design ideas adapted from Locator (Battey et al. 2020, *eLife*) and GeoGenIE (Martin et al. 2025, *Bioinformatics Advances*), which this project benchmarks against but does not reuse code from.
 
 Code is provided for the purpose of reproducing the results in this
 manuscript. Contact the corresponding author for reuse terms.
+qinxinghu@gmail.com
