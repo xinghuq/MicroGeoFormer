@@ -1,8 +1,8 @@
-# MicroGeoFormer
+# MicroGeoGate
 
-A locus-attention deep learning model for predicting the geographic origin (latitude, longitude) of an individual organism from its multilocus genotype data (microsatellite or SNP). MicroGeoFormer is purpose-built for **sparse genetic marker panels** — the kind of low-locus, small-reference-sample data typical of legacy agricultural pest, forestry, and wildlife genetic-monitoring programmes — and is applicable to migratory-pest source-tracing, invasive-species incursion tracing, and endangered-species provenance verification.
+A locus-attention deep learning model for predicting the geographic origin (latitude, longitude) of an individual organism from its multilocus genotype data (microsatellite or SNP). MicroGeoGate is purpose-built for **sparse genetic marker panels** — the kind of low-locus, small-reference-sample data typical of legacy agricultural pest, forestry, and wildlife genetic-monitoring programmes — and is applicable to migratory-pest source-tracing, invasive-species incursion tracing, and endangered-species provenance verification.
 
-This repository contains the core, reusable model. For the full simulation benchmark and manuscript reproduction code, see the companion `microgeoformer-paper` repository.
+This repository contains the core, reusable model. For the full simulation benchmark and manuscript reproduction code, see the companion `MicroGeoGate-paper` repository.
 
 ## Key features
 
@@ -14,8 +14,8 @@ This repository contains the core, reusable model. For the full simulation bench
 ## Installation
 
 ```bash
-git clone https://github.com/xinghuq/microgeoformer.git
-cd microgeoformer
+git clone https://github.com/xinghuq/MicroGeoGate.git
+cd MicroGeoGate
 pip install -r requirements.txt
 pip install -e .
 ```
@@ -26,7 +26,7 @@ Requirements: Python ≥3.9, NumPy, SciPy, scikit-learn, PyTorch ≥2.0. No GPU 
 
 ```python
 import numpy as np
-from microgeoformer import MicroGeoFormer
+from MicroGeoGate import MicroGeoGate
 
 # X: genotypes, shape (n_individuals, n_loci, 2) — two allele calls per locus,
 #    as integers (e.g. microsatellite repeat-size alleles or SNP 0/1 codes)
@@ -43,7 +43,7 @@ idx_train, idx_test = train_test_split(
     np.arange(len(X)), test_size=0.25, stratify=locality_id, random_state=0
 )
 
-model = MicroGeoFormer(epochs=400)
+model = MicroGeoGate(epochs=400)
 model.fit(X[idx_train], Y[idx_train], locality_id=locality_id[idx_train])
 
 # Point prediction + calibrated uncertainty + per-locus importance
@@ -58,15 +58,15 @@ print("Median error (km):", model.score(X[idx_test], Y[idx_test]))
 Save and reload a trained model:
 
 ```python
-model.save("microgeoformer_trained.pkl")
-model = MicroGeoFormer.load("microgeoformer_trained.pkl")
+model.save("MicroGeoGate_trained.pkl")
+model = MicroGeoGate.load("MicroGeoGate_trained.pkl")
 ```
 
-> **Note on reproducibility of predictions.** MicroGeoFormer uses Monte Carlo dropout at inference to produce calibrated uncertainty estimates, so two calls to `.predict()` on the same fitted model will return very slightly different point predictions (this is expected — it is exactly what makes `Y_std` meaningful, not a bug). If you need bit-for-bit reproducible output, set `mc_samples=1` and call `torch.manual_seed()` immediately before `.predict()`.
+> **Note on reproducibility of predictions.** MicroGeoGate uses Monte Carlo dropout at inference to produce calibrated uncertainty estimates, so two calls to `.predict()` on the same fitted model will return very slightly different point predictions (this is expected — it is exactly what makes `Y_std` meaningful, not a bug). If you need bit-for-bit reproducible output, set `mc_samples=1` and call `torch.manual_seed()` immediately before `.predict()`.
 
 ## When to use Mendelian-resampling augmentation
 
-Augmentation (`augment=True`, the default) is recommended whenever your reference localities have fewer than roughly 15–20 individuals each — the regime MicroGeoFormer is specifically designed for. If your reference panel already has large, well-balanced samples per locality (dozens of individuals each) and a dense marker panel (hundreds of SNPs or more), a simpler classical method such as PCA + *k*-nearest-neighbours may perform as well or better at a fraction of the computational cost; see the benchmark results in the accompanying paper for guidance on when MicroGeoFormer's advantage is, and is not, expected to hold.
+Augmentation (`augment=True`, the default) is recommended whenever your reference localities have fewer than roughly 15–20 individuals each — the regime MicroGeoGate is specifically designed for. If your reference panel already has large, well-balanced samples per locality (dozens of individuals each) and a dense marker panel (hundreds of SNPs or more), a simpler classical method such as PCA + *k*-nearest-neighbours may perform as well or better at a fraction of the computational cost; see the benchmark results in the accompanying paper for guidance on when MicroGeoGate's advantage is, and is not, expected to hold.
 
 ## Handling missing data
 
@@ -74,7 +74,7 @@ Missing genotype calls can be encoded with any consistent sentinel integer not o
 
 ## API reference
 
-### `MicroGeoFormer(hidden=96, depth=4, dropout=0.25, epochs=400, lr=1.5e-3, weight_decay=5e-4, loss_weights=(0.4, 0.6), augment=True, n_synth_per_locality=20, mc_samples=15, density_weighting=True, random_state=0)`
+### `MicroGeoGate(hidden=96, depth=4, dropout=0.25, epochs=400, lr=1.5e-3, weight_decay=5e-4, loss_weights=(0.4, 0.6), augment=True, n_synth_per_locality=20, mc_samples=15, density_weighting=True, random_state=0)`
 
 | Parameter | Description |
 |---|---|
@@ -95,13 +95,13 @@ Missing genotype calls can be encoded with any consistent sentinel integer not o
 - `fit(X, Y, locality_id=None, verbose=False)` — train the model.
 - `predict(X, return_std=False, return_locus_importance=False)` — predict `(latitude, longitude)`, optionally with uncertainty and/or per-locus importance weights.
 - `score(X, Y)` — median Haversine prediction error (km) on a labelled test set.
-- `save(path)` / `MicroGeoFormer.load(path)` — persist and reload a trained model.
+- `save(path)` / `MicroGeoGate.load(path)` — persist and reload a trained model.
 
-Lower-level utilities (`DosageEncoder`, `mendelian_augment`, `haversine_km`) are also importable from `microgeoformer` directly if you want to build a custom pipeline.
-# MicroGeoFormer: Supplementary Code
+Lower-level utilities (`DosageEncoder`, `mendelian_augment`, `haversine_km`) are also importable from `MicroGeoGate` directly if you want to build a custom pipeline.
+# MicroGeoGate: Supplementary Code
 
 This archive contains all code used to produce the simulation benchmark, the
-real-data application, and the figures reported in "MicroGeoFormer: a
+real-data application, and the figures reported in "MicroGeoGate: a
 locus-attention deep learning framework for fine-scale geographic origin
 assignment from sparse genetic marker panels."
 
@@ -110,13 +110,13 @@ assignment from sparse genetic marker panels."
 | File | Purpose |
 |---|---|
 | `simulate.py` | Forward-time Wright-Fisher stepping-stone population genetic simulator (microsatellite and SNP marker regimes). |
-| `geomethods.py` | Core library: genotype encoding, MicroGeoFormer model (`LocusGatedMLP`, `microgeoformer_predict`), baseline methods (PCA+kNN, Locator-style MLP, GeoGenIE-style MLP), Mendelian resampling augmentation, multi-modal extensions, and learned-feature extraction. |
+| `geomethods.py` | Core library: genotype encoding, MicroGeoGate model (`LocusGatedMLP`, `MicroGeoGate_predict`), baseline methods (PCA+kNN, Locator-style MLP, GeoGenIE-style MLP), Mendelian resampling augmentation, multi-modal extensions, and learned-feature extraction. |
 | `load_real_data.py`, `load_real_data2.py` | Loaders for the Ortego et al. (2015) grasshopper microsatellite dataset (`.xls` genotype/phenotype file), mapping sample localities to the geographic coordinates in Table 1 of the source publication. |
 | `00_make_architecture_figure.py` | Draws Figure 1 (network architecture schematic). No data dependencies. |
-| `01_simulation_benchmark_microsatellite.py` | Runs the four-method benchmark (PCA+kNN, Locator-style, GeoGenIE-style, MicroGeoFormer) on the simulated 15-locus microsatellite panel across the reference-sample-size gradient (5-55 individuals/locality). Produces `gradient_results_*.json`. |
+| `01_simulation_benchmark_microsatellite.py` | Runs the four-method benchmark (PCA+kNN, Locator-style, GeoGenIE-style, MicroGeoGate) on the simulated 15-locus microsatellite panel across the reference-sample-size gradient (5-55 individuals/locality). Produces `gradient_results_*.json`. |
 | `02_simulation_benchmark_snp.py` | As above, for the simulated 50-locus compact SNP panel. Produces `gradient_snp_results_*.json`. |
 | `03_real_data_4fold_cv.py` | Runs stratified 4-fold cross-validation on the real grasshopper data for one species at a time (pass species code `Mw`, `Ci`, or `Od` as a command-line argument), producing out-of-fold genotype-based predictions for every individual. Produces `kfold_results_{code}.pkl`. |
-| `04_extract_learned_features.py` | Trains MicroGeoFormer on the full real dataset for one species and extracts the 96-dimensional penultimate-layer representation for every individual (used for Supplementary Fig. S2). Produces `learned_features_{code}.pkl`. |
+| `04_extract_learned_features.py` | Trains MicroGeoGate on the full real dataset for one species and extracts the 96-dimensional penultimate-layer representation for every individual (used for Supplementary Fig. S2). Produces `learned_features_{code}.pkl`. |
 | `05_make_figures.py` | Draws Figure 2, Figure 3, Supplementary Figure S1, and Supplementary Figure S2 from the JSON/pickle outputs of the scripts above. |
 
 ## Reproducing the results
@@ -163,7 +163,7 @@ for any analysis. A suitable file was obtained from the public
 
 Python 3.12, NumPy, SciPy, scikit-learn 1.8, PyTorch 2.12, Matplotlib,
 pandas. All models were trained on CPU; no GPU is required to reproduce the
-reported results (individual MicroGeoFormer fits complete in under 30
+reported results (individual MicroGeoGate fits complete in under 30
 seconds on a standard CPU core).
 
 ## Notes on baseline implementations
@@ -184,9 +184,9 @@ codebase.
 
 ## Citation
 
-If you use MicroGeoFormer in your research, please cite:
+If you use MicroGeoGate in your research, please cite:
 
-> Qin., X et al. 2026. MicroGeoFormer: resolving the geographic source-tracing challenge for migratory pests, biological invasions and trafficked wildlife with a locus-attention deep learning framework.
+> Qin., X et al. 2026. MicroGeoGate: resolving the geographic source-tracing challenge for migratory pests, biological invasions and trafficked wildlife with a locus-attention deep learning framework.
 
 ## License
 
