@@ -1,11 +1,11 @@
 """
-microgeoformer.model
+MicroGeoGate.model
 =====================
-Core neural network and encoding logic for MicroGeoFormer: a locus-attention
+Core neural network and encoding logic for MicroGeoGate: a locus-attention
 deep learning model for predicting geographic origin (latitude, longitude)
 from multilocus genotype data (microsatellite or SNP).
 
-This module implements a scikit-learn-style estimator (`MicroGeoFormer`)
+This module implements a scikit-learn-style estimator (`MicroGeoGate`)
 with `.fit()`, `.predict()`, `.save()`, and `.load()` methods, so the model
 can be used as a drop-in tool without needing to understand the internal
 PyTorch implementation.
@@ -88,7 +88,7 @@ def mendelian_augment(X_geno, Y, locality_id, n_synth_per_locality=20, seed=0, e
     """Mendelian-resampling data augmentation: synthesizes additional training
     genotypes by resampling gamete pairs from individuals collected at the
     same reference locality. Recommended when per-locality sample sizes are
-    small (fewer than ~15 individuals), the regime MicroGeoFormer targets."""
+    small (fewer than ~15 individuals), the regime MicroGeoGate targets."""
     rng = np.random.default_rng(seed)
     localities = np.unique(locality_id)
     Xs, Ys, Es = [], [], []
@@ -166,7 +166,7 @@ class LocusGatedMLP(nn.Module):
 # Public API
 # ---------------------------------------------------------------------
 
-class MicroGeoFormer:
+class MicroGeoGate:
     """Locus-attention deep learning model for predicting geographic origin
     (latitude, longitude) from multilocus genotype data.
 
@@ -201,8 +201,8 @@ class MicroGeoFormer:
 
     Example
     -------
-    >>> from microgeoformer import MicroGeoFormer
-    >>> model = MicroGeoFormer(epochs=400)
+    >>> from MicroGeoGate import MicroGeoGate
+    >>> model = MicroGeoGate(epochs=400)
     >>> model.fit(X_train, Y_train, locality_id=D_train)
     >>> Y_pred, Y_std = model.predict(X_test, return_std=True)
     """
