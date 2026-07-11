@@ -1,6 +1,6 @@
 """
 Reproduces Figures 1-3 and Supplementary Figures S1-S2 of the manuscript
-"MicroGeoFormer: a locus-attention deep learning framework for fine-scale
+"MicroGeoGate: a locus-attention deep learning framework for fine-scale
 geographic origin assignment from sparse genetic marker panels".
 
 This script assumes the outputs of scripts 01-04 (JSON result files and
@@ -30,15 +30,15 @@ def make_figure2():
     with open('gradient_results_merged.json') as f:
         msat = json.load(f)
     levels = sorted(msat.keys(), key=lambda x: int(x))
-    methods = ['PCA_kNN', 'Locator_MLP', 'GeoGenIE_style', 'MicroGeoFormer']
+    methods = ['PCA_kNN', 'Locator_MLP', 'GeoGenIE_style', 'MicroGeoGate']
     labels = {'PCA_kNN': 'PCA+kNN (KLFDAPC-like)', 'Locator_MLP': 'Locator-style MLP',
-              'GeoGenIE_style': 'GeoGenIE-style MLP', 'MicroGeoFormer': 'MicroGeoFormer (proposed)'}
-    colors = {'PCA_kNN': '#1b4f72', 'Locator_MLP': '#186a3b', 'GeoGenIE_style': '#b9770e', 'MicroGeoFormer': '#922b21'}
+              'GeoGenIE_style': 'GeoGenIE-style MLP', 'MicroGeoGate': 'MicroGeoGate (proposed)'}
+    colors = {'PCA_kNN': '#1b4f72', 'Locator_MLP': '#186a3b', 'GeoGenIE_style': '#b9770e', 'MicroGeoGate': '#922b21'}
 
     fig, ax = plt.subplots(figsize=(12, 6.2))
     x = np.arange(len(levels))
     width = 0.2
-    offsets = {'PCA_kNN': -1.5*width, 'Locator_MLP': -0.5*width, 'GeoGenIE_style': 0.5*width, 'MicroGeoFormer': 1.5*width}
+    offsets = {'PCA_kNN': -1.5*width, 'Locator_MLP': -0.5*width, 'GeoGenIE_style': 0.5*width, 'MicroGeoGate': 1.5*width}
 
     for m in methods:
         means = np.array([np.mean(msat[l][m]) for l in levels])
@@ -47,7 +47,7 @@ def make_figure2():
                label=labels[m].replace('\n', ' '), edgecolor='white', linewidth=0.4)
 
     for i, l in enumerate(levels):
-        ours = msat[l]['MicroGeoFormer']
+        ours = msat[l]['MicroGeoGate']
         for m in ['PCA_kNN', 'Locator_MLP', 'GeoGenIE_style']:
             comp = msat[l][m]
             _, p = ttest_ind(ours, comp)
@@ -74,21 +74,21 @@ def make_figureS1():
     with open('gradient_snp_results_merged.json') as f:
         snp = json.load(f)
     levels = sorted(snp.keys(), key=lambda x: int(x))
-    methods = ['PCA_kNN', 'Locator_MLP', 'GeoGenIE_style', 'MicroGeoFormer']
+    methods = ['PCA_kNN', 'Locator_MLP', 'GeoGenIE_style', 'MicroGeoGate']
     labels = {'PCA_kNN': 'PCA+kNN (KLFDAPC-like)', 'Locator_MLP': 'Locator-style MLP',
-              'GeoGenIE_style': 'GeoGenIE-style MLP', 'MicroGeoFormer': 'MicroGeoFormer (proposed)'}
-    colors = {'PCA_kNN': '#1b4f72', 'Locator_MLP': '#186a3b', 'GeoGenIE_style': '#b9770e', 'MicroGeoFormer': '#922b21'}
+              'GeoGenIE_style': 'GeoGenIE-style MLP', 'MicroGeoGate': 'MicroGeoGate (proposed)'}
+    colors = {'PCA_kNN': '#1b4f72', 'Locator_MLP': '#186a3b', 'GeoGenIE_style': '#b9770e', 'MicroGeoGate': '#922b21'}
 
     fig, ax = plt.subplots(figsize=(12, 6.2))
     x = np.arange(len(levels))
     width = 0.2
-    offsets = {'PCA_kNN': -1.5*width, 'Locator_MLP': -0.5*width, 'GeoGenIE_style': 0.5*width, 'MicroGeoFormer': 1.5*width}
+    offsets = {'PCA_kNN': -1.5*width, 'Locator_MLP': -0.5*width, 'GeoGenIE_style': 0.5*width, 'MicroGeoGate': 1.5*width}
     for m in methods:
         means = np.array([np.mean(snp[l][m]) for l in levels])
         sems = np.array([np.std(snp[l][m])/np.sqrt(5) for l in levels])
         ax.bar(x+offsets[m], means, width, yerr=sems, color=colors[m], capsize=3, label=labels[m], edgecolor='white', linewidth=0.4)
     for i, l in enumerate(levels):
-        ours = snp[l]['MicroGeoFormer']
+        ours = snp[l]['MicroGeoGate']
         for m in ['PCA_kNN', 'Locator_MLP', 'GeoGenIE_style']:
             comp = snp[l][m]
             _, p = ttest_ind(ours, comp)
@@ -98,7 +98,7 @@ def make_figureS1():
                 ax.text(x[i]+offsets[m], y_top+0.8, sig, ha='center', fontsize=11, color='#333333', fontweight='bold')
             elif p < 0.05 and np.mean(ours) > np.mean(comp):
                 y_top = np.mean(ours) + np.std(ours)/np.sqrt(5)
-                ax.text(x[i]+offsets['MicroGeoFormer'], y_top+0.8, '#', ha='center', fontsize=10, color='#922b21', fontweight='bold')
+                ax.text(x[i]+offsets['MicroGeoGate'], y_top+0.8, '#', ha='center', fontsize=10, color='#922b21', fontweight='bold')
     ax.set_xticks(x)
     ax.set_xticklabels([f'n={l}' for l in levels], fontsize=10)
     ax.set_xlabel('Training individuals per reference locality', fontsize=11)

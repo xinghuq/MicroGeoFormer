@@ -1,5 +1,5 @@
 """
-Draws Figure 1 (MicroGeoFormer network architecture schematic).
+Draws Figure 1 (MicroGeoGate network architecture schematic).
 No data dependencies; produces Figure1.png directly.
 """
 import matplotlib

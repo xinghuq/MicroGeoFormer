@@ -195,10 +195,10 @@ class LocusGatedMLP(nn.Module):
             return out, gate_w, h
         return out, gate_w
 
-def microgeoformer_predict(Xtr_geno, Ytr, Xte_geno, Dtr=None, epochs=400,
+def MicroGeoGate_predict(Xtr_geno, Ytr, Xte_geno, Dtr=None, epochs=400,
                             augment=True, n_synth_per_deme=15, mc_samples=15,
                             hidden=96, depth=4):
-    """MicroGeoFormer: locus-attention-gated deep MLP for geographic-origin prediction
+    """MicroGeoGate: locus-attention-gated deep MLP for geographic-origin prediction
     from microsatellite / small SNP panels, with Mendelian-resampling augmentation for
     sparse reference panels and MC-dropout uncertainty quantification."""
     _, ranges, enc = encode_genotypes_grouped(Xtr_geno)
@@ -346,7 +346,7 @@ def multimodal_geo_predict(Xtr_geno, Ytr, Xte_geno, Dtr=None, Ptr=None, Pte=None
                             mode='joint', epochs=400, augment=True, n_synth_per_deme=15,
                             mc_samples=15, hidden=96, depth=4):
     """Geographic-origin prediction with selectable input modality:
-      mode='geno'  -> genotype only (equivalent to microgeoformer_predict)
+      mode='geno'  -> genotype only (equivalent to MicroGeoGate_predict)
       mode='pheno' -> phenotype (or other auxiliary feature matrix Ptr/Pte) only
       mode='joint' -> genotype + phenotype fused (multi-modal)
     Ptr/Pte should be 2D arrays (n_samples, n_features); NaNs are mean-imputed per feature.
@@ -518,9 +518,9 @@ def freqprofile_geo_predict(Xtr_geno, Ytr, Xte_geno, Dtr, epochs=350, hidden=64,
     preds = np.stack(preds,0)
     return np.median(preds,0), preds.std(0)
 
-def microgeoformer_extract_features(X_geno, Y, D, epochs=400, augment=True,
+def MicroGeoGate_extract_features(X_geno, Y, D, epochs=400, augment=True,
                                      n_synth_per_deme=15, hidden=96, depth=4):
-    """Train MicroGeoFormer on the full dataset and return the learned penultimate-layer
+    """Train MicroGeoGate on the full dataset and return the learned penultimate-layer
     ('extracted genetic feature') representation for every real (non-synthetic) individual,
     for downstream visualization (e.g. PCA colored by source locality)."""
     _, ranges, enc = encode_genotypes_grouped(X_geno)
@@ -565,3 +565,111 @@ def microgeoformer_extract_features(X_geno, Y, D, epochs=400, augment=True,
     with torch.no_grad():
         _, _, hidden_feats = model(torch.tensor(Freal, dtype=torch.float32), return_hidden=True)
     return hidden_feats.numpy()
+
+
+# ======================================================================
+# Transformer variants (for architecture-comparison benchmark only).
+# These were implemented to test whether cross-locus self-attention helps
+# on sparse marker panels. They share the SAME dosage encoding, the SAME
+# Mendelian augmentation, and the SAME combined loss as MicroGeoGate, so
+# the only difference is the core aggregation mechanism.
+# ======================================================================
+
+class LocusTransformerV1(nn.Module):
+    """Variant 1: full cross-locus self-attention. Each locus's dosage block
+    is projected to a fixed-width token; a standard TransformerEncoder applies
+    multi-head self-attention across the L locus-tokens; the pooled token
+    representation feeds the same MLP head. Tests whether modelling explicit
+    locus-locus interactions helps geographic prediction."""
+    def __init__(self, ranges, d_model=32, nhead=4, nlayers=2, hidden=96, dropout=0.25):
+        super().__init__()
+        self.ranges = ranges
+        self.proj = nn.ModuleList([nn.Linear(e - s, d_model) for (s, e) in ranges])
+        enc_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead,
+                                               dim_feedforward=hidden, dropout=dropout,
+                                               batch_first=True)
+        self.encoder = nn.TransformerEncoder(enc_layer, num_layers=nlayers)
+        self.head = nn.Sequential(nn.Linear(d_model, hidden), nn.ELU(),
+                                  nn.Dropout(dropout), nn.Linear(hidden, 2))
+
+    def forward(self, x):
+        tokens = [self.proj[i](x[:, s:e]) for i, (s, e) in enumerate(self.ranges)]
+        seq = torch.stack(tokens, dim=1)              # (batch, L, d_model)
+        enc = self.encoder(seq)                       # (batch, L, d_model)
+        pooled = enc.mean(dim=1)                      # mean-pool over loci
+        return self.head(pooled)
+
+
+class LocusTransformerV2(nn.Module):
+    """Variant 2: lightweight attention pooling, NO cross-locus self-attention.
+    Each locus token gets a scalar attention score; a softmax over loci gives
+    attention-weighted pooling of the tokens before the MLP head. A cheaper
+    'attention' design than V1 that still avoids the per-locus independent
+    gate used by the final MicroGeoGate model."""
+    def __init__(self, ranges, d_model=32, hidden=96, dropout=0.25):
+        super().__init__()
+        self.ranges = ranges
+        self.proj = nn.ModuleList([nn.Linear(e - s, d_model) for (s, e) in ranges])
+        self.attn = nn.Linear(d_model, 1)
+        self.head = nn.Sequential(nn.Linear(d_model, hidden), nn.ELU(),
+                                  nn.Dropout(dropout), nn.Linear(hidden, 2))
+
+    def forward(self, x):
+        tokens = [self.proj[i](x[:, s:e]) for i, (s, e) in enumerate(self.ranges)]
+        seq = torch.stack(tokens, dim=1)              # (batch, L, d_model)
+        score = self.attn(torch.tanh(seq))            # (batch, L, 1)
+        w = torch.softmax(score, dim=1)               # attention over loci
+        pooled = (seq * w).sum(dim=1)                 # (batch, d_model)
+        return self.head(pooled)
+
+
+def _transformer_predict(model_cls, Xtr_geno, Ytr, Xte_geno, Dtr=None, epochs=220,
+                         augment=True, n_synth_per_deme=15, mc_samples=15, **model_kw):
+    """Shared train/predict wrapper for the Transformer variants, matched to
+    MicroGeoGate_predict: same encoding, same Mendelian augmentation, same
+    density-weighted combined loss, same MC-dropout inference."""
+    _, ranges, enc = encode_genotypes_grouped(Xtr_geno)
+    Xaug, Yaug = Xtr_geno.copy(), Ytr.copy()
+    if augment and Dtr is not None:
+        Xs, Ys, _ = mendelian_augment(Xtr_geno, Ytr, Dtr, n_synth_per_deme=n_synth_per_deme)
+        if len(Xs):
+            Xaug = np.concatenate([Xtr_geno, Xs], axis=0)
+            Yaug = np.concatenate([Ytr, Ys], axis=0)
+    Faug = enc.transform(Xaug); Fte = enc.transform(Xte_geno)
+    mu, sd = Yaug.mean(0), Yaug.std(0) + 1e-8
+    Yn = (Yaug - mu) / sd
+    mu_t = torch.tensor(mu, dtype=torch.float32); sd_t = torch.tensor(sd, dtype=torch.float32)
+    from sklearn.neighbors import NearestNeighbors
+    k = min(6, len(Yaug) - 1)
+    dist, _ = NearestNeighbors(n_neighbors=k).fit(Yaug).kneighbors(Yaug)
+    dens = 1.0 / (dist.mean(1) + 1e-3); w = (1.0 / dens); w = w / w.mean()
+    w_t = torch.tensor(w, dtype=torch.float32)
+    model = model_cls(ranges, **model_kw)
+    opt = torch.optim.Adam(model.parameters(), lr=1.5e-3, weight_decay=5e-4)
+    Xb = torch.tensor(Faug, dtype=torch.float32)
+    Yb_n = torch.tensor(Yn, dtype=torch.float32)
+    Yb_true = torch.tensor(Yaug, dtype=torch.float32)
+    for ep in range(epochs):
+        model.train(); opt.zero_grad()
+        out_n = model(Xb)
+        out = out_n * sd_t + mu_t
+        loss_mse = (((out_n - Yb_n) ** 2).mean(1) * w_t).mean()
+        loss_hav = haversine_loss_torch(Yb_true, out)
+        loss = 0.4 * loss_mse + 0.6 * (loss_hav / 1000.0)
+        loss.backward(); opt.step()
+    model.train()
+    preds = []
+    Xte_t = torch.tensor(Fte, dtype=torch.float32)
+    with torch.no_grad():
+        for _ in range(mc_samples):
+            preds.append(model(Xte_t).numpy() * sd + mu)
+    preds = np.stack(preds, 0)
+    return np.median(preds, 0)
+
+
+def baseline_transformer_v1(Xtr_geno, Ytr, Xte_geno, Dtr=None, epochs=220):
+    return _transformer_predict(LocusTransformerV1, Xtr_geno, Ytr, Xte_geno, Dtr=Dtr, epochs=epochs)
+
+
+def baseline_transformer_v2(Xtr_geno, Ytr, Xte_geno, Dtr=None, epochs=220):
+    return _transformer_predict(LocusTransformerV2, Xtr_geno, Ytr, Xte_geno, Dtr=Dtr, epochs=epochs)

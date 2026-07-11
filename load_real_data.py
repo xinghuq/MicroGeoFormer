@@ -34,7 +34,7 @@ def match_locality(name):
     return key_map.get(name, name)
 
 def load_species(sheet):
-    df = pd.read_excel('/mnt/user-data/uploads/PhenotypicGenotypicData.xls', sheet_name=sheet)
+    df = pd.read_excel('/mnt/data/grasshopper/PhenotypicGenotypicData.xls', sheet_name=sheet)
     loc_cols = [c for c in df.columns if c not in ['ID','Species','Locality','Sex','Femur Length']]
     n_loci = len(loc_cols)//2
     genos = []

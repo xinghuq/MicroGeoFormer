@@ -16,7 +16,7 @@ def split(X,Y,D,n_train,n_test,seed):
 
 levels = [int(x) for x in sys.argv[1].split(',')]
 n_reps = 5
-methods = ['PCA_kNN','Locator_MLP','GeoGenIE_style','MicroGeoFormer']
+methods = ['PCA_kNN','Locator_MLP','GeoGenIE_style','MicroGeoGate']
 results = {lvl: {m: [] for m in methods} for lvl in levels}
 
 for lvl in levels:
@@ -33,8 +33,8 @@ for lvl in levels:
         p = gm.baseline_geogenie_style(Xtr,Ytr,Xte,epochs=250)
         results[lvl]['GeoGenIE_style'].append(float(np.median(gm.haversine_km(Yte,p))))
 
-        p,_,_ = gm.microgeoformer_predict(Xtr,Ytr,Xte,Dtr=Dtr,n_synth_per_deme=15,epochs=220)
-        results[lvl]['MicroGeoFormer'].append(float(np.median(gm.haversine_km(Yte,p))))
+        p,_,_ = gm.MicroGeoGate_predict(Xtr,Ytr,Xte,Dtr=Dtr,n_synth_per_deme=15,epochs=220)
+        results[lvl]['MicroGeoGate'].append(float(np.median(gm.haversine_km(Yte,p))))
         print(lvl,'rep',rep,'done',flush=True)
 
 with open(f'gradient_results_{"_".join(map(str,levels))}.json','w') as f:

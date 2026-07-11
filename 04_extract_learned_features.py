@@ -13,7 +13,7 @@ sheet = SHEETS[code]
 X, Y, locs, ids, n_loci = load_species(sheet)
 D = deme_ids(locs)
 t0=time.time()
-feats = gm.microgeoformer_extract_features(X, Y, D, epochs=400, n_synth_per_deme=15)
+feats = gm.MicroGeoGate_extract_features(X, Y, D, epochs=400, n_synth_per_deme=15)
 print(code, 'features shape', feats.shape, 'time', round(time.time()-t0,1))
 with open(f'learned_features_{code}.pkl','wb') as f:
     pickle.dump(dict(feats=feats, Y=Y, locs=locs), f)
