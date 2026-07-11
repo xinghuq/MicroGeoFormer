@@ -1,10 +1,10 @@
 """
 quickstart.py
 =============
-Minimal, runnable example of the MicroGeoFormer workflow, using synthetic
+Minimal, runnable example of the MicroGeoGate workflow, using synthetic
 data generated on the fly so this script works out of the box with no
 external data files. Replace the synthetic-data block with your own
-genotype/coordinate arrays to use MicroGeoFormer on real data.
+genotype/coordinate arrays to use MicroGeoGate on real data.
 
 Run with:
     python examples/quickstart.py
@@ -12,11 +12,11 @@ Run with:
 import numpy as np
 from sklearn.model_selection import train_test_split
 
-from microgeoformer import MicroGeoFormer, haversine_km
+from MicroGeoGate import MicroGeoGate, haversine_km
 
 
 def make_synthetic_data(n_localities=12, n_per_locality=20, n_loci=8, seed=0):
-    """Generates a toy dataset with the same shape conventions MicroGeoFormer
+    """Generates a toy dataset with the same shape conventions MicroGeoGate
     expects: genotypes (n_individuals, n_loci, 2), coordinates
     (n_individuals, 2), and a locality label per individual. Individuals
     from the same locality share noisy versions of a locality-specific
@@ -45,7 +45,7 @@ def main():
         np.arange(len(X)), test_size=0.25, stratify=locality_id, random_state=0
     )
 
-    model = MicroGeoFormer(epochs=300, mc_samples=10, random_state=0)
+    model = MicroGeoGate(epochs=300, mc_samples=10, random_state=0)
     model.fit(X[idx_train], Y[idx_train], locality_id=locality_id[idx_train], verbose=True)
 
     Y_pred, Y_std, locus_importance = model.predict(
@@ -60,8 +60,8 @@ def main():
     print(f"mean uncertainty (deg):  {Y_std.mean(axis=0)}")
     print(f"locus importance:        {np.round(locus_importance, 3)}")
 
-    model.save("microgeoformer_quickstart.pkl")
-    print("\nSaved trained model to microgeoformer_quickstart.pkl")
+    model.save("MicroGeoGate_quickstart.pkl")
+    print("\nSaved trained model to MicroGeoGate_quickstart.pkl")
 
 
 if __name__ == "__main__":
